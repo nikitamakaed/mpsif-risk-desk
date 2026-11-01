@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+</head>
+<body>
+<title>MPSIF Risk Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: dark trading-desk surface, one accent (orange) for the active book, steel blue for the market. Dense, scannable, tabular. */
+:root{
+  --bg:#0E1626; --panel:#152036; --panel2:#1B2843; --line:#263754; --line2:#30415F;
+  --fg:#E9EEF6; --fg2:#A9B4C8; --fg3:#71809A;
+  --acc:#E07020; --acc2:#F2A15F; --mkt:#5B93D6;
+  --good:#3DBE8B; --warn:#E6B23A; --bad:#E5604D;
+  --display:"Barlow Semi Condensed",ui-sans-serif,system-ui,sans-serif;
+  --body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --bg:#F3F5F9; --panel:#FFFFFF; --panel2:#EEF2F8; --line:#D8DFEA; --line2:#C6CFDD;
+  --fg:#141C2B; --fg2:#47536A; --fg3:#7A869C; --acc:#D9641E; --acc2:#B64F12; --mkt:#2F6DB5;
+  --good:#1E8F63; --warn:#B8860B; --bad:#C2412F; color-scheme:light; } }
+:root[data-theme="light"]{
+  --bg:#F3F5F9; --panel:#FFFFFF; --panel2:#EEF2F8; --line:#D8DFEA; --line2:#C6CFDD;
+  --fg:#141C2B; --fg2:#47536A; --fg3:#7A869C; --acc:#D9641E; --acc2:#B64F12; --mkt:#2F6DB5;
+  --good:#1E8F63; --warn:#B8860B; --bad:#C2412F; color-scheme:light; }
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 32px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+a{color:var(--acc2)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.up{color:var(--good)} .dn{color:var(--bad)}
+.muted{color:var(--fg3)}
+.eyebrow{font-family:var(--display);text-transform:uppercase;letter-spacing:.12em;font-size:11px;color:var(--fg3);font-weight:600}
+
+/* gate */
+#gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+#gate form{width:min(360px,100%);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--acc);padding:28px;border-radius:6px}
+#gate h1{font-family:var(--display);font-size:28px;margin:0 0 4px;font-weight:700;letter-spacing:.01em}
+#gate p{margin:0 0 18px;color:var(--fg2)}
+#gate input{width:100%;padding:10px 12px;border:1px solid var(--line2);background:var(--panel2);color:var(--fg);border-radius:4px;font:inherit;font-family:var(--mono)}
+#gate button{margin-top:12px;width:100%;padding:10px;border:0;border-radius:4px;background:var(--acc);color:#fff;font:600 14px var(--body);cursor:pointer}
+#gate .err{color:var(--bad);font-size:12px;min-height:16px;margin-top:8px}
+#gate form.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* header */
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px))) 0 calc(-1*max(16px,env(safe-area-inset-right,0px)));padding:12px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+.hd{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline}
+.brand{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.01em}
+.brand b{color:var(--acc)}
+.hdstat{display:flex;gap:18px;flex-wrap:wrap;margin-left:auto;align-items:baseline}
+.hdstat .k{font-size:11px;color:var(--fg3);text-transform:uppercase;letter-spacing:.08em;font-family:var(--display)}
+.hdstat .v{font-family:var(--mono);font-size:15px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--fg2)}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--fg3);display:inline-block}
+.chip.live i{background:var(--good)} .chip.snap i{background:var(--warn)}
+.chip button{all:unset;cursor:pointer;color:var(--acc2);font-weight:600}
+nav{display:flex;gap:2px;margin-top:10px;overflow-x:auto}
+nav button{all:unset;cursor:pointer;padding:8px 14px;font:600 13px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);border-bottom:2px solid transparent;white-space:nowrap}
+nav button[aria-selected="true"]{color:var(--fg);border-color:var(--acc)}
+nav button .badge{background:var(--bad);color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+
+main{max-width:1280px;margin:0 auto}
+section.tab{display:none;padding-top:18px}
+section.tab.on{display:block}
+.grid{display:grid;gap:14px}
+.tiles{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+.tile .k{font-size:11px;color:var(--fg3);text-transform:uppercase;letter-spacing:.08em;font-family:var(--display);font-weight:600}
+.tile .v{font-family:var(--mono);font-size:22px;margin-top:4px;line-height:1.1}
+.tile .s{font-size:12px;color:var(--fg2);margin-top:4px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.panel h2{font-family:var(--display);font-size:17px;margin:0 0 2px;font-weight:600;letter-spacing:.01em}
+.panel .sub{color:var(--fg3);font-size:12px;margin-bottom:10px}
+.cols{display:grid;gap:14px;grid-template-columns:1fr}
+@media(min-width:900px){.cols.c2{grid-template-columns:1fr 1fr}.cols.c21{grid-template-columns:2fr 1fr}.cols.c3{grid-template-columns:1fr 1fr 1fr}}
+.mt{margin-top:14px}
+
+table{border-collapse:collapse;width:100%;font-size:13px}
+.tw{overflow-x:auto}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-family:var(--display);font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--fg3);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel)}
+th:first-child,td:first-child{text-align:left}
+th.l,td.l{text-align:left}
+td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.t{font-family:var(--body)}
+tr.sec td{background:var(--panel2);font-family:var(--display);font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.06em;font-size:11px}
+tr.tot td{font-weight:600;border-top:1px solid var(--line2)}
+.tk{font-weight:600;color:var(--fg)}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font:600 11px var(--body);letter-spacing:.02em}
+.pill.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.pill.watch{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.pill.breach{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.pill.na{background:var(--panel2);color:var(--fg3)}
+
+/* bars */
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;font-size:13px}
+.bars .lab{color:var(--fg2);white-space:nowrap}
+.bars .bar{height:14px;background:var(--panel2);border-radius:3px;position:relative;overflow:hidden}
+.bars .bar i{position:absolute;top:0;bottom:0;background:var(--acc);border-radius:3px}
+.bars .bar i.m{background:var(--mkt)}
+.bars .bar i.neg{background:var(--bad)}
+.bars .val{font-family:var(--mono);white-space:nowrap}
+svg text{font-family:var(--mono);font-size:11px;fill:var(--fg3)}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--fg2);margin-top:6px;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;background:var(--acc);margin-right:6px;vertical-align:middle}
+.legend span.m::before{background:var(--mkt)}
+.tip{position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--line2);border-radius:4px;padding:6px 8px;font:12px var(--mono);color:var(--fg);display:none;z-index:3;white-space:nowrap}
+.heat{display:grid;gap:2px;font-size:10px}
+.heat div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:2px;color:var(--fg);font-family:var(--mono);min-width:0}
+.heat .h{aspect-ratio:auto;color:var(--fg3);font-family:var(--display);font-size:10px}
+.note{font-size:12px;color:var(--fg3);margin-top:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
+.kv b{font-family:var(--mono);font-weight:500}
+.cal{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:700px){.cal{grid-template-columns:1fr 1fr}}
+.month h3{font-family:var(--display);font-size:14px;margin:0 0 6px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--fg2)}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.mgrid .dow{font:600 10px var(--display);color:var(--fg3);text-align:center;letter-spacing:.06em}
+.mgrid .day{min-height:46px;background:var(--panel2);border-radius:3px;padding:3px 4px;font-size:10px;color:var(--fg3);font-family:var(--mono);min-width:0}
+.mgrid .day.pad{background:transparent}
+.mgrid .day.today{outline:1.5px solid var(--acc)}
+.mgrid .day.past{opacity:.5}
+.mgrid .day b{display:block;font:600 10px var(--body);color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mgrid .day b.big{color:var(--acc2)}
+footer{color:var(--fg3);font-size:12px;margin-top:28px;text-align:center}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+</style>
+
+<div id="gate">
+  <form id="gateForm" autocomplete="off">
+    <div class="eyebrow">MPSIF · Opportunistic Equities</div>
+    <h1>Risk Desk</h1>
+    <p>Pod members only. Enter the desk password.</p>
+    <input id="pw" type="password" placeholder="password" aria-label="Password">
+    <button type="submit">Open the desk</button>
+    <div class="err" id="gateErr"></div>
+  </form>
+</div>
+
+<header>
+  <div class="hd">
+    <div class="brand">MPSIF <b>Risk Desk</b></div>
+    <span class="chip snap" id="srcChip"><i></i><span id="srcTxt">loading…</span> <button id="refresh" title="Re-read the sheet">↻</button></span>
+    <div class="hdstat">
+      <div><div class="k">NAV</div><div class="v" id="hNav">—</div></div>
+      <div><div class="k">Today</div><div class="v" id="hToday">—</div></div>
+      <div><div class="k">Active book</div><div class="v" id="hActive">—</div></div>
+      <div><div class="k">Beta</div><div class="v" id="hBeta">—</div></div>
+    </div>
+  </div>
+  <nav role="tablist">
+    <button role="tab" data-tab="book" aria-selected="true">Book</button>
+    <button role="tab" data-tab="risk">Risk</button>
+    <button role="tab" data-tab="earnings">Earnings <span class="badge" id="earnBadge" hidden>0</span></button>
+    <button role="tab" data-tab="limits">Limits <span class="badge" id="limBadge" hidden>0</span></button>
+    <button role="tab" data-tab="people">People</button>
+  </nav>
+</header>
+
+<main>
+  <section class="tab on" id="tab-book">
+    <div class="grid tiles" id="bookTiles"></div>
+    <div class="cols c21 mt">
+      <div class="panel"><h2>Active book vs. SPY</h2><div class="sub" id="eqSub">Cumulative return since the first pod trade. Active book = every name except the index ETFs, time-weighted so buys and sells don't distort it.</div><div id="eqChart" style="position:relative"></div><div class="legend"><span>Active book</span><span class="m">SPY</span></div></div>
+      <div class="panel"><h2>Where the money is</h2><div class="sub">Share of NAV</div><div id="allocBars" class="bars"></div>
+        <h2 style="margin-top:16px">Today's movers</h2><div class="sub">Active book, $ P&amp;L today</div><div id="moverBars" class="bars"></div></div>
+    </div>
+    <div class="panel mt"><h2>Price targets</h2><div class="sub">From the <code>Names &amp; Sectors</code> tab: owner's target, downside case, one-line thesis. A name at or through its target, or below its downside case, is flagged.</div><div id="targets"></div></div>
+    <div class="panel mt"><h2>Positions</h2><div class="sub">Click a column to sort. Index ETFs shown separately from the active book.</div><div class="tw"><table id="posTable"></table></div></div>
+  </section>
+
+  <section class="tab" id="tab-risk">
+    <div class="grid tiles" id="riskTiles"></div>
+    <div class="cols c2 mt">
+      <div class="panel"><h2>Sector exposure</h2><div class="sub">Active book only, % of NAV. Index ETFs excluded.</div><div id="sectorBars" class="bars"></div></div>
+      <div class="panel"><h2>Concentration</h2><div class="sub">Largest active positions, % of NAV</div><div id="concBars" class="bars"></div></div>
+    </div>
+    <div class="cols c2 mt">
+      <div class="panel"><h2>Risk contribution</h2><div class="sub">Share of active-book volatility each name is responsible for (Euler decomposition on 1y daily returns). Shares sum to 100%.</div><div id="rcBars" class="bars"></div></div>
+      <div class="panel"><h2>Per-position risk</h2><div class="sub">Beta and volatility regressed on SPY over the Prices tab (up to 1y of closes)</div><div class="tw"><table id="riskTable"></table></div></div>
+    </div>
+    <div class="cols c2 mt">
+      <div class="panel"><h2>Sector tilt vs. S&amp;P 500</h2><div class="sub">Active book sector weight minus the index's weight. Right = overweight. Benchmark weights are approximate (<code>BENCH_WEIGHTS</code>).</div><div id="tiltBars" class="bars"></div><div class="note" id="tiltNote"></div></div>
+      <div class="panel"><h2>Liquidity</h2><div class="sub">Position as a share of 3-month average daily volume. Above 5% of a day's volume starts to cost you on the way out.</div><div id="liqBars" class="bars"></div></div>
+    </div>
+    <div class="panel mt"><h2>Correlation</h2><div class="sub">Daily-return correlation across the active book. Dark orange = moves together; blue = moves apart.</div><div class="tw"><div id="heat" class="heat"></div></div></div>
+  </section>
+
+  <section class="tab" id="tab-earnings">
+    <div class="grid tiles" id="earnTiles"></div>
+    <div class="cols c21 mt">
+      <div class="panel"><h2>Calendar</h2><div class="sub">Every print in the book, this month and next. ◐ before the open, ● after the close. Orange = above the size threshold.</div><div id="cal" class="cal"></div></div>
+      <div class="panel"><h2>Pre-print checklist</h2><div class="sub">Placeholder rules until the pod sets its own (<code>EARNINGS_RULES</code> in the page script).</div><div id="earnRules"></div></div>
+    </div>
+    <div class="panel mt"><h2>Upcoming prints</h2><div class="sub">Implied move is the options straddle for the print where available, or an override typed in the sheet. $ at risk = implied move × position.</div><div class="tw"><table id="earnTable"></table></div></div>
+  </section>
+  <section class="tab" id="tab-limits">
+    <div class="panel"><h2>Limit sheet</h2><div class="sub">Placeholder limits until the pod agrees its own. Edit the <code>LIMITS</code> block at the top of the page script.</div><div class="tw"><table id="limTable"></table></div></div>
+    <div class="cols c2 mt">
+      <div class="panel"><h2>Drawdown ladder</h2><div class="sub">Measured on the NAV curve, peak to trough</div><div id="ddLadder" class="kv"></div></div>
+      <div class="panel"><h2>Position rules</h2><div class="sub">Names needing attention against the per-position rules</div><div class="tw"><table id="posRules"></table></div></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-people">
+    <div class="grid tiles" id="peopleTiles"></div>
+    <div class="panel mt"><h2>Attribution</h2><div class="sub">Unrealized + realized P&amp;L by book, $ and % of capital deployed</div><div id="peopleBars" class="bars"></div></div>
+    <div class="panel mt"><h2>Closed trades</h2><div class="sub">Every sell in the Trade Log, marked against the average cost at the time. Full exits are the pod's realized track record; partial sells are trims.</div><div class="tw"><table id="closedTable"></table></div></div>
+    <div id="peopleTables" class="mt"></div>
+  </section>
+  <footer id="foot"></footer>
+</main>
+
+<script>
+/* ===================== CONFIG ===================== */
+const CONFIG = {
+  pub: "https://docs.google.com/spreadsheets/d/e/2PACX-1vReP2ZKMy8A2FwuVL6sqZRN7zUJshmX_XdD2fn7X3rmR8Pq5RGqK22EHcG9Jtx2E7pNk-uq6ksVECuP/pub",
+  gids: { positions: 977219586, trades: 1309512514, prices: 424242, earnings: 626262, names: 515151 },
+  pollSeconds: 60,
+  // sha256("mpsif") — change by hashing a new password (see README note in chat)
+  passHash: "6412b4bf532bcf0ab60fdafdab49f48d3fa9ff69cefe828f9f54e4f5ece10b0c",
+  indexTickers: ["VOO","SPY"],
+  benchmark: "SPY",
+  inception: "2026-10-02",
+  startingCapital: 890000   // book was funded with $890,000
+};
+/* ===================== LIMITS (placeholder) ===================== */
+const LIMITS = {
+  singleActiveMaxPctNAV: 0.05,     // one active name, % of NAV
+  topFiveActiveMaxPctNAV: 0.15,    // five largest active names together
+  sectorMaxPctActive: 0.45,        // one sector, % of active book
+  minPositionPctNAV: 0.005,        // smallest sensible position
+  maxActiveNames: 25,
+  betaBand: [0.8, 1.3],            // whole-account beta vs SPY
+  cashMinPctNAV: 0.01,
+  activeVolTarget: 0.22,           // annualized, active book (soft)
+  trimAt: -0.15,                   // half-trim review from cost
+  reunderwriteAt: -0.25,           // written re-underwrite from cost
+  giveBackPts: 0.20,               // review when a winner gives back this much from its peak gain (needs a peak-since-entry series; not graded yet)
+  drawdown: [[-0.05,"No action"],[-0.10,"Written thesis restatement in 48h"],[-0.15,"Cut active book to 85%"],[-0.20,"Full book re-underwrite"]]
+};
+/* ===================== SNAPSHOT (fallback when the sheet can't be fetched) ===================== */
+const SNAPSHOT = { asOf: "", positions: "", trades: "", prices: "", earnings: "", names: "" };
+/* S&P 500 sector weights used for the tilt view. Approximate, as of Oct 2026 — update when you have a fresher breakdown. */
+const BENCH_WEIGHTS = {"Information Technology":0.34,"Financials":0.13,"Communication Services":0.10,"Consumer Discretionary":0.105,"Health Care":0.095,"Industrials":0.085,"Consumer Staples":0.05,"Energy":0.03,"Utilities":0.025,"Real Estate":0.02,"Materials":0.02};
+/* ===================== EARNINGS RULES (placeholder) ===================== */
+const EARNINGS_RULES = {
+  windowDays: 5,              // a print inside this many days is "live"
+  maxPctNavIntoPrint: 0.03,   // a single name larger than this into a print needs a written plan
+  noteRequired: true,         // an Earnings Plan chosen in the sheet (Earnings tab, column J) is required inside the window
+  maxDollarAtRiskPctNav: 0.01 // total implied $ at risk across prints in the window, % of NAV
+};
+
+/* ===================== helpers ===================== */
+const $=s=>document.querySelector(s);
+const fmt$=(v,d=0)=>(v<0?"-":"")+"$"+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtP=(v,d=1)=>(v>0?"+":"")+(v*100).toFixed(d)+"%";
+const fmtPn=(v,d=1)=>(v*100).toFixed(d)+"%";
+const cls=v=>v>0?"up":v<0?"dn":"";
+function num(s){ if(s==null) return NaN; if(typeof s==="number") return s; s=String(s).trim(); if(!s||s==="-") return NaN;
+  let neg=/^\(.*\)$/.test(s)||s.startsWith("-"); s=s.replace(/[()$,%\s+]/g,"").replace(/^-/,""); const v=parseFloat(s); return isNaN(v)?NaN:(neg?-v:v); }
+function pct(s){ const v=num(s); return isNaN(v)?NaN:(String(s).includes("%")?v/100:v); }
+function parseCSV(text){ const rows=[];let row=[],f="",q=false; for(let i=0;i<text.length;i++){const c=text[i];
+  if(q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false;} else f+=c; }
+  else if(c==='"') q=true; else if(c===","){row.push(f);f="";} else if(c==="\n"){row.push(f);rows.push(row);row=[];f="";} else if(c!=="\r") f+=c; }
+  if(f.length||row.length){row.push(f);rows.push(row);} return rows; }
+function pDate(s){ if(!s) return null; const m=String(s).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(!m) return null; let y=+m[3]; if(y<100) y+=2000; return new Date(Date.UTC(y,+m[1]-1,+m[2])); }
+const dkey=d=>d.toISOString().slice(0,10);
+const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+function cov(a,b){ const ma=mean(a),mb=mean(b); let s=0; for(let i=0;i<a.length;i++) s+=(a[i]-ma)*(b[i]-mb); return s/(a.length-1); }
+async function sha256(t){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
+
+/* ===================== data model ===================== */
+function buildModel(posRows, tradeRows, priceRows, nameRows){
+  const H=posRows[0].map(h=>h.trim()); const col=n=>H.findIndex(h=>h.toLowerCase().startsWith(n.toLowerCase()));
+  const cBook=col("Book"),cT=col("Ticker"),cName=col("Company"),cSec=col("Sector"),cDate=col("Initial Date"),cAvg=col("Average Entry"),cPx=col("Current Price"),cSh=col("Shares"),cCost=col("Total Inital"),cMV=col("Current $"),cTd=col("Today's Δ %"),cBeta=col("Beta"),cHi=col("52w High"),cLo=col("52w Low"),cAdv=col("Avg Volume"),cPT=col("Price Target");
+  let cash=0; const pos=[];
+  for(const r of posRows.slice(1)){ const t=(r[cT]||"").trim(); if(!t) continue;
+    if((r[cBook]||"").trim()==="Cash"){ cash=num(r[cMV]); continue; }
+    const p={book:r[cBook].trim(),t,name:r[cName],sector:r[cSec]||"Unassigned",since:r[cDate],avg:num(r[cAvg]),px:num(r[cPx]),sh:num(r[cSh]),cost:num(r[cCost]),mv:num(r[cMV]),today:pct(r[cTd]),gBeta:num(r[cBeta]),hi:num(r[cHi]),lo:num(r[cLo])};
+    p.adv=cAdv>=0?num(r[cAdv]):NaN; p.pt=cPT>=0?num(r[cPT]):NaN; p.index=CONFIG.indexTickers.includes(t); p.pnl=p.mv-p.cost; p.ret=p.cost?p.pnl/p.cost:0; p.todayD=p.mv-p.mv/(1+(p.today||0)); pos.push(p); }
+  const nav=cash+pos.reduce((s,p)=>s+p.mv,0);
+  pos.forEach(p=>{ p.w=p.mv/nav; p.pctAdv=(isFinite(p.adv)&&p.adv>0)?p.sh/p.adv:NaN; });
+  // names & sectors: price target, downside case, thesis
+  if(nameRows&&nameRows.length>1){ const NH=nameRows[0].map(h=>h.trim().toLowerCase()); const ni=n=>NH.findIndex(h=>h.startsWith(n)); const nT=ni("ticker"),nPT=ni("price target"),nDn=ni("downside"),nTh=ni("thesis");
+    for(const r of nameRows.slice(1)){ const p=pos.find(x=>x.t===(r[nT]||"").trim().toUpperCase()); if(!p) continue; const pt=nPT>=0?num(r[nPT]):NaN; if(isFinite(pt)&&pt>0) p.pt=pt; p.down=nDn>=0?num(r[nDn]):NaN; p.thesis=nTh>=0?(r[nTh]||"").trim():""; } }
+  pos.forEach(p=>{ p.upside=(isFinite(p.pt)&&p.pt>0)?p.pt/p.px-1:NaN; });
+  // trades
+  const TH=tradeRows[0].map(h=>h.trim()); const tc=n=>TH.findIndex(h=>h.toLowerCase().startsWith(n.toLowerCase()));
+  const tT=tc("Ticker"),tA=tc("Action"),tS=tc("Shares"),tP=tc("Fill"),tD=tc("Date"),tAn=tc("Analyst");
+  const trades=[]; for(const r of tradeRows.slice(1)){ const t=(r[tT]||"").trim().toUpperCase(); const a=(r[tA]||"").trim(); if(!t||!/^(buy|sell)$/i.test(a)) continue;
+    const sh=num(r[tS]),px=num(r[tP]); if(!(sh>0)||!(px>0)) continue; const d=pDate(r[tD]); trades.push({t,buy:/buy/i.test(a),sh,px,date:d,held:!d,analyst:(r[tAn]||"").trim()}); }
+  // closed trades: replay every ticker at average cost, realized P&L on each sell
+  const normBook=g=>/center book/i.test(g||"")?"Center Book":(g||"Unassigned");
+  const closed=[]; const realizedBy={}; { const byT={}; for(const x of trades){ (byT[x.t]=byT[x.t]||[]).push(x); }
+    for(const tk in byT){ const xs=byT[tk].slice().sort((a,b)=>(a.held?0:a.date.getTime())-(b.held?0:b.date.getTime())); let sh=0,cost=0,first=null,book=null;
+      for(const x of xs){ if(x.buy){ if(!book&&x.analyst) book=normBook(x.analyst); if(!first&&x.date) first=x.date; sh+=x.sh; cost+=x.sh*x.px; }
+        else { if(sh<=0) continue; const avg=cost/sh; const q=Math.min(x.sh,sh); const pnl=q*(x.px-avg); sh-=q; cost-=q*avg; const b=book||"Center Book"; realizedBy[b]=(realizedBy[b]||0)+pnl;
+          closed.push({t:tk,book:b,date:x.date,sh:q,avg,px:x.px,pnl,ret:x.px/avg-1,hold:(first&&x.date)?Math.round((x.date-first)/864e5):null,full:sh<0.0001,index:CONFIG.indexTickers.includes(tk)}); } } } }
+  const lastFill={}; for(const x of trades.slice().sort((a,b)=>(a.held?0:a.date.getTime())-(b.held?0:b.date.getTime()))) lastFill[x.t]=x.px;
+  // prices
+  const PH=priceRows[0]; const dates=[],P={}; PH.slice(1).forEach(t=>P[t]=[]);
+  for(const r of priceRows.slice(1)){ const d=pDate(r[0]); if(!d) continue; dates.push(d); PH.slice(1).forEach((t,i)=>P[t].push(num(r[i+1]))); }
+  // append today using live prices if newer than last close
+  const lastKey=dates.length?dkey(dates[dates.length-1]):""; const todayKey=dkey(new Date());
+  if(lastKey && lastKey<todayKey){ const d=new Date(); const live={}; pos.forEach(p=>live[p.t]=p.px); const bm=P[CONFIG.benchmark]; const bmLast=bm[bm.length-1];
+    const spyToday=pos.find(p=>p.t===CONFIG.benchmark); dates.push(new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())));
+    for(const t of Object.keys(P)){ const arr=P[t]; const v=live[t]; arr.push(isFinite(v)&&v>0?v:arr[arr.length-1]); } }
+  const n=dates.length;
+  const ret=t=>{ const a=P[t]; if(!a) return null; const r=[]; for(let i=1;i<a.length;i++){ r.push((isFinite(a[i])&&isFinite(a[i-1])&&a[i-1]>0)?a[i]/a[i-1]-1:NaN);} return r; };
+  const rb=ret(CONFIG.benchmark);
+  // beta & vol per name
+  for(const p of pos){ const r=ret(p.t); p.beta=NaN;p.vol=NaN;p.obs=0; if(!r||!rb) continue; const x=[],y=[]; for(let i=0;i<r.length;i++){ if(isFinite(r[i])&&isFinite(rb[i])){x.push(rb[i]);y.push(r[i]);} }
+    p.obs=x.length; if(x.length>=40){ p.beta=cov(x,y)/cov(x,x); p.vol=Math.sqrt(cov(y,y)*252); p.r=y; p.rx=x; } }
+  // active book cov matrix (aligned on common dates — use last 120 obs where all have data)
+  const act=pos.filter(p=>!p.index&&p.obs>=40);
+  const L=Math.min(...act.map(p=>p.r.length),252); const R=act.map(p=>p.r.slice(-L));
+  const W=act.map(p=>p.mv); const wsum=W.reduce((s,x)=>s+x,0); const w=W.map(x=>x/wsum);
+  const C=act.map((_,i)=>act.map((_,j)=>{ const a=[],b=[]; for(let k=0;k<L;k++){ if(isFinite(R[i][k])&&isFinite(R[j][k])){a.push(R[i][k]);b.push(R[j][k]);} } return a.length>20?cov(a,b):0; }));
+  const Sw=C.map(row=>row.reduce((s,c,j)=>s+c*w[j],0)); const var_=w.reduce((s,x,i)=>s+x*Sw[i],0);
+  act.forEach((p,i)=>{ p.rc=var_>0?w[i]*Sw[i]/var_:0; p.corr=C[i].map((c,j)=>{ const d=Math.sqrt(C[i][i]*C[j][j]); return d>0?c/d:0; }); });
+  const activeVol=Math.sqrt(var_*252);
+  const activeMV=pos.filter(p=>!p.index).reduce((s,p)=>s+p.mv,0), indexMV=pos.filter(p=>p.index).reduce((s,p)=>s+p.mv,0);
+  const activeBeta=act.reduce((s,p)=>s+p.beta*p.mv,0)/wsum;
+  const portBeta=pos.reduce((s,p)=>s+(isFinite(p.beta)?p.beta:1)*p.mv,0)/nav; // cash beta 0; index ~1
+  // equity curve: replay trades against closes
+  const inc=new Date(CONFIG.inception+"T00:00:00Z"); const idx0=dates.findIndex(d=>d>=inc);
+  const buys=trades.filter(x=>x.buy).reduce((s,x)=>s+x.sh*x.px,0), sells=trades.filter(x=>!x.buy).reduce((s,x)=>s+x.sh*x.px,0);
+  const cash0=cash+buys-sells; const curve=[];
+  for(let i=idx0;i<n;i++){ const d=dates[i]; let v=0,cf=0; const hold={};
+    for(const x of trades){ if(x.held||x.date<=d){ hold[x.t]=(hold[x.t]||0)+(x.buy?x.sh:-x.sh); cf+=(x.buy?-1:1)*x.sh*x.px; } }
+    for(const t in hold){ const a=P[t]; const px=a?a[i]:NaN; if(hold[t]>0.0001) v+=hold[t]*(isFinite(px)&&px>0?px:((pos.find(p=>p.t===t)||{}).px||lastFill[t]||0)); }
+    curve.push({d,nav:v+cash0+cf,spy:P[CONFIG.benchmark][i]}); }
+  // normalise: prior to the first logged trade, held names existed; use first point as base
+  const base=curve[0]; const cap0=CONFIG.startingCapital||base.nav; curve.forEach(c=>{c.navI=c.nav/cap0*100; c.spyI=c.spy/base.spy*100;});
+  let peak=cap0,maxDD=0,dd=0; curve.forEach(c=>{ peak=Math.max(peak,c.nav); dd=c.nav/peak-1; maxDD=Math.min(maxDD,dd); }); const curDD=dd;
+  // active book: time-weighted return since the first pod trade (daily chain, flows at fill price), SPY over the same window
+  const actTrades=trades.filter(x=>!CONFIG.indexTickers.includes(x.t));
+  const firstPod=actTrades.filter(x=>x.date&&!/center book/i.test(x.analyst)).map(x=>x.date).sort((a,b)=>a-b)[0]||actTrades.filter(x=>x.date).map(x=>x.date).sort((a,b)=>a-b)[0]||inc;
+  const i0=Math.max(1,dates.findIndex(d=>d>=firstPod)); const awin=[];
+  const valueAt=(i,d)=>{ const hold={}; for(const x of actTrades){ if(x.held||x.date<=d){ hold[x.t]=(hold[x.t]||0)+(x.buy?x.sh:-x.sh);} } let v=0; for(const tk in hold){ if(hold[tk]>0.0001){ const a=P[tk]; const px=a?a[i]:NaN; v+=hold[tk]*(isFinite(px)&&px>0?px:((pos.find(q=>q.t===tk)||{}).px||lastFill[tk]||0));} } return v; };
+  let cum=1; let vPrev=valueAt(i0-1,dates[i0-1]); const spy0=P[CONFIG.benchmark][i0-1];
+  awin.push({d:dates[i0-1],act:0,spy:0});
+  for(let i=i0;i<n;i++){ const d=dates[i]; const flow=actTrades.filter(x=>x.date&&dkey(x.date)===dkey(d)).reduce((s,x)=>s+(x.buy?1:-1)*x.sh*x.px,0); const v=valueAt(i,d); const base=vPrev+flow; const r=base>0?(v-base)/base:0; cum*=1+r; awin.push({d,act:cum-1,spy:P[CONFIG.benchmark][i]/spy0-1}); vPrev=v; }
+  let apeak=-Infinity,aDD=0,aMaxDD=0; awin.forEach(c=>{ const lvl=1+c.act; apeak=Math.max(apeak,lvl); aDD=lvl/apeak-1; aMaxDD=Math.min(aMaxDD,aDD); });
+  // people
+  const books={}; for(const p of pos){ const b=books[p.book]||(books[p.book]={name:p.book,pos:[],cost:0,mv:0,today:0}); b.pos.push(p);b.cost+=p.cost;b.mv+=p.mv;b.today+=p.todayD; }
+  for(const b of Object.values(books)){ b.pnl=b.mv-b.cost; b.realized=realizedBy[b.name]||0; b.ret=b.cost?b.pnl/b.cost:0; b.wins=b.pos.filter(p=>p.pnl>0).length; b.n=b.pos.length; b.w=b.mv/nav; }
+  const sectors={}; for(const p of pos.filter(p=>!p.index)){ sectors[p.sector]=(sectors[p.sector]||0)+p.mv; }
+  return {cash,nav,pos,trades,closed,realizedBy,dates,P,act,curve,maxDD,curDD,awin,aDD,aMaxDD,firstPod,activeVol,activeMV,indexMV,activeBeta,portBeta,books,sectors,today:pos.reduce((s,p)=>s+p.todayD,0),
+    unreal:pos.reduce((s,p)=>s+p.pnl,0),activeUnreal:pos.filter(p=>!p.index).reduce((s,p)=>s+p.pnl,0),activeCost:pos.filter(p=>!p.index).reduce((s,p)=>s+p.cost,0)};
+}
+
+/* ===================== rendering ===================== */
+function tile(k,v,s,c){ return `<div class="tile"><div class="k">${k}</div><div class="v ${c||""}">${v}</div>${s?`<div class="s">${s}</div>`:""}</div>`; }
+function bars(el,rows,opt={}){ const max=Math.max(...rows.map(r=>Math.abs(r.v)),1e-9); el.innerHTML=rows.map(r=>`<div class="lab">${r.l}</div><div class="bar"><i class="${r.cls||""}" style="left:${r.v<0?50-Math.abs(r.v)/max*50:(opt.center?50:0)}%;width:${Math.abs(r.v)/max*(opt.center?50:100)}%"></i></div><div class="val ${opt.sign?cls(r.v):""}">${r.f}</div>`).join(""); }
+function table(el,cols,rows,opts={}){ let sortKey=opts.sort||null,dir=opts.dir||-1;
+  const draw=()=>{ let rs=rows.slice(); if(sortKey){ rs.sort((a,b)=>{ const x=a[sortKey],y=b[sortKey]; if(typeof x==="string"||typeof y==="string") return String(x).localeCompare(String(y))*dir; return ((isFinite(x)?x:-Infinity)-(isFinite(y)?y:-Infinity))*dir; }); }
+    el.innerHTML=`<thead><tr>${cols.map(c=>`<th class="${c.l?"l":""}" data-k="${c.k}">${c.h}${sortKey===c.k?(dir<0?" ▾":" ▴"):""}</th>`).join("")}</tr></thead><tbody>${rs.map(r=>`<tr class="${r._cls||""}">${cols.map(c=>`<td class="${c.l?"l t":""} ${c.c?c.c(r):""}">${c.f(r)}</td>`).join("")}</tr>`).join("")}${opts.foot?`<tr class="tot">${opts.foot.map((f,i)=>`<td class="${cols[i].l?"l t":""}">${f}</td>`).join("")}</tr>`:""}</tbody>`;
+    el.querySelectorAll("th").forEach(th=>th.onclick=()=>{ const k=th.dataset.k; if(sortKey===k) dir=-dir; else {sortKey=k;dir=-1;} draw(); }); };
+  draw(); }
+function lineChart(el,series,opts={}){ const W=el.clientWidth||600,H=opts.h||260,m={t:12,r:12,b:26,l:40}; const n=series[0].v.length; if(n<2){el.innerHTML="<div class='muted'>Not enough history yet.</div>";return;}
+  const all=series.flatMap(s=>s.v); let lo=Math.min(...all),hi=Math.max(...all); const pad=(hi-lo)*0.08||1; lo-=pad;hi+=pad;
+  const x=i=>m.l+i/(n-1)*(W-m.l-m.r), y=v=>m.t+(hi-v)/(hi-lo)*(H-m.t-m.b);
+  const ticks=[];const step=(hi-lo)/4; for(let k=0;k<=4;k++) ticks.push(lo+step*k);
+  const xt=[0,Math.floor((n-1)/2),n-1];
+  const d=opts.dates; const fd=i=>d[i].toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"});
+  const paths=series.map(s=>`<path d="${s.v.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join(" ")}" fill="none" stroke="var(--${s.color})" stroke-width="2" stroke-linejoin="round"/>`+(s.area?`<path d="${s.v.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join(" ")} L${x(n-1).toFixed(1)} ${y(lo)} L${x(0)} ${y(lo)} Z" fill="var(--${s.color})" opacity=".08"/>`:"")+`<circle cx="${x(n-1)}" cy="${y(s.v[n-1])}" r="3.5" fill="var(--${s.color})" stroke="var(--panel)" stroke-width="2"/>`).join("");
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="${opts.label||""}">${ticks.map(t=>`<line x1="${m.l}" x2="${W-m.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${m.l-6}" y="${y(t)+4}" text-anchor="end">${opts.tick?opts.tick(t):t.toFixed(opts.dec??0)}</text>`).join("")}${xt.map((i,k)=>`<text x="${x(i)}" y="${H-8}" text-anchor="${k===0?"start":k===xt.length-1?"end":"middle"}">${fd(i)}</text>`).join("")}${paths}<line id="xh" x1="0" x2="0" y1="${m.t}" y2="${H-m.b}" stroke="var(--fg3)" stroke-dasharray="3 3" style="display:none"/></svg><div class="tip"></div>`;
+  const svg=el.querySelector("svg"),tip=el.querySelector(".tip"),xh=el.querySelector("#xh");
+  svg.addEventListener("mousemove",e=>{ const r=svg.getBoundingClientRect(); const px=(e.clientX-r.left)/r.width*W; const i=Math.max(0,Math.min(n-1,Math.round((px-m.l)/(W-m.l-m.r)*(n-1))));
+    xh.setAttribute("x1",x(i));xh.setAttribute("x2",x(i));xh.style.display="block"; tip.style.display="block"; tip.innerHTML=`<b>${fd(i)}</b><br>${series.map(s=>`${s.name}: ${opts.fmt?opts.fmt(s.v[i]):s.v[i].toFixed(1)}`).join("<br>")}`;
+    const left=(e.clientX-r.left); tip.style.left=(left>r.width*0.6?left-tip.offsetWidth-10:left+10)+"px"; tip.style.top=(e.clientY-r.top-10)+"px"; });
+  svg.addEventListener("mouseleave",()=>{xh.style.display="none";tip.style.display="none";}); }
+
+function drawEq(M){ lineChart($("#eqChart"),[{name:"Active book",v:M.awin.map(c=>c.act*100),color:"acc",area:true},{name:"SPY",v:M.awin.map(c=>c.spy*100),color:"mkt"}],{dates:M.awin.map(c=>c.d),dec:1,tick:v=>(v>0?"+":"")+v.toFixed(1)+"%",fmt:v=>(v>0?"+":"")+v.toFixed(2)+"%",label:"Active book vs SPY cumulative return"}); $("#eqSub").textContent=`Cumulative return since ${M.firstPod.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"})}, the first pod trade. Active book = every name except the index ETFs, time-weighted so buys and sells don't distort it.`; }
+function render(M,src){
+  const act=M.pos.filter(p=>!p.index), idx=M.pos.filter(p=>p.index);
+  $("#hNav").textContent=fmt$(M.nav)+" ("+fmtP(M.nav/CONFIG.startingCapital-1,2)+")"; $("#hToday").textContent=fmt$(M.today)+" ("+fmtP(M.today/(M.nav-M.today),2)+")"; $("#hToday").className="v "+cls(M.today);
+  $("#hActive").textContent=fmtPn(M.activeMV/M.nav)+" of NAV"; $("#hBeta").textContent=M.portBeta.toFixed(2);
+  // BOOK
+  $("#bookTiles").innerHTML=[
+    tile("Net asset value",fmt$(M.nav),`Cash ${fmt$(M.cash)} · ${fmtPn(M.cash/M.nav,2)} · started ${fmt$(CONFIG.startingCapital)}`),
+    tile("Today",fmt$(M.today),fmtP(M.today/(M.nav-M.today),2)+" on NAV",cls(M.today)),
+    tile("Unrealized P&L",fmt$(M.unreal),fmtP(M.unreal/(M.nav-M.unreal),2)+" on cost",cls(M.unreal)),
+    tile("Active book",fmt$(M.activeMV),`${act.length} names · ${fmtPn(M.activeMV/M.nav)} of NAV`),
+    tile("Active book P&L",fmt$(M.activeUnreal),fmtP(M.activeUnreal/M.activeCost,2)+" on cost",cls(M.activeUnreal)),
+    tile("Index ballast",fmtPn(M.indexMV/M.nav),`${idx.map(p=>p.t).join(" + ")} · ${fmt$(M.indexMV)}`),
+    tile("Active book since "+M.firstPod.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"}),fmtP(M.awin[M.awin.length-1].act,2),`SPY ${fmtP(M.awin[M.awin.length-1].spy,2)} · ${fmtP(M.awin[M.awin.length-1].act-M.awin[M.awin.length-1].spy,2)} vs market`,cls(M.awin[M.awin.length-1].act-M.awin[M.awin.length-1].spy)),
+    tile("Whole account",fmtP(M.nav/CONFIG.startingCapital-1,2),`${fmt$(M.nav-CONFIG.startingCapital)} on ${fmt$(CONFIG.startingCapital)} starting capital · SPY ${fmtP(M.curve[M.curve.length-1].spyI/100-1,2)} since 10/2`,cls(M.nav-CONFIG.startingCapital)),
+    tile("Active-book drawdown",fmtPn(M.aMaxDD,2),`Current ${fmtPn(M.aDD,2)} from peak · account ${fmtPn(M.curDD,2)}`,cls(M.aMaxDD))
+  ].join("");
+  drawEq(M);
+  const bk=Object.values(M.books).sort((a,b)=>b.mv-a.mv);
+  bars($("#allocBars"),[{l:"Index ETFs",v:M.indexMV/M.nav,f:fmtPn(M.indexMV/M.nav),cls:"m"},...bk.map(b=>({l:b.name==="Center Book"?"Center Book (stocks)":b.name,v:(b.name==="Center Book"?b.mv-M.indexMV:b.mv)/M.nav,f:fmtPn((b.name==="Center Book"?b.mv-M.indexMV:b.mv)/M.nav)})),{l:"Cash",v:M.cash/M.nav,f:fmtPn(M.cash/M.nav,2),cls:"m"}]);
+  const mv=act.slice().sort((a,b)=>Math.abs(b.todayD)-Math.abs(a.todayD)).slice(0,8);
+  bars($("#moverBars"),mv.map(p=>({l:p.t,v:p.todayD,f:fmt$(p.todayD)+" · "+fmtP(p.today,1),cls:p.todayD<0?"neg":""})),{center:true,sign:true});
+  const posCols=[{h:"Ticker",k:"t",l:1,f:r=>`<span class="tk" title="${(r.thesis||"").replace(/"/g,"&quot;")}">${r.t}</span> <span class="muted">${r.name}</span>`},{h:"Book",k:"book",l:1,f:r=>r.book},{h:"Sector",k:"sector",l:1,f:r=>r.sector},{h:"Shares",k:"sh",f:r=>r.sh.toFixed(2)},{h:"Avg cost",k:"avg",f:r=>fmt$(r.avg,2)},{h:"Price",k:"px",f:r=>fmt$(r.px,2)},{h:"Mkt value",k:"mv",f:r=>fmt$(r.mv)},{h:"% NAV",k:"w",f:r=>fmtPn(r.w,2)},{h:"P&L $",k:"pnl",f:r=>fmt$(r.pnl),c:r=>cls(r.pnl)},{h:"P&L %",k:"ret",f:r=>fmtP(r.ret,1),c:r=>cls(r.ret)},{h:"Today",k:"today",f:r=>fmtP(r.today,2),c:r=>cls(r.today)},{h:"Off 52w hi",k:"hi",f:r=>isFinite(r.hi)?fmtPn(r.px/r.hi-1,1):"—"},{h:"PT",k:"pt",f:r=>isFinite(r.pt)?fmt$(r.pt,0):"—"},{h:"To PT",k:"upside",f:r=>isFinite(r.upside)?fmtP(r.upside,0):"—",c:r=>cls(r.upside)},{h:"Beta",k:"beta",f:r=>isFinite(r.beta)?r.beta.toFixed(2):"—"}];
+  table($("#posTable"),posCols,[...act.map(p=>({...p})),...idx.map(p=>({...p,_cls:"idx"}))],{sort:"mv"});
+  // targets
+  const withPT=act.filter(p=>isFinite(p.pt)&&p.pt>0);
+  if(!withPT.length) $("#targets").innerHTML=`<div class="muted">No price targets set yet. Type a target (and optionally a downside case and thesis) next to each ticker in the sheet's Names &amp; Sectors tab and they appear here.</div>`;
+  else table($("#targets"),[{h:"Ticker",k:"t",l:1,f:r=>`<span class="tk">${r.t}</span> <span class="muted">${r.book}</span>`},{h:"Price",k:"px",f:r=>fmt$(r.px,2)},{h:"Target",k:"pt",f:r=>fmt$(r.pt,2)},{h:"To target",k:"upside",f:r=>fmtP(r.upside,1),c:r=>cls(r.upside)},{h:"Downside",k:"down",f:r=>isFinite(r.down)?fmt$(r.down,2):"—"},{h:"Status",k:"st",f:r=>r.upside<=0?`<span class="pill watch">At / through target</span>`:(isFinite(r.down)&&r.px<r.down)?`<span class="pill breach">Below downside case</span>`:`<span class="pill ok">In range</span>`},{h:"Thesis",k:"thesis",l:1,f:r=>`<span class="muted">${r.thesis||""}</span>`}],withPT.map(p=>({...p,st:p.upside<=0?2:(isFinite(p.down)&&p.px<p.down)?3:1})),{sort:"upside",dir:1});
+  // RISK
+  const top5=act.slice().sort((a,b)=>b.mv-a.mv).slice(0,5).reduce((s,p)=>s+p.mv,0);
+  const hiBeta=act.filter(p=>isFinite(p.beta)).sort((a,b)=>b.beta-a.beta)[0];
+  $("#riskTiles").innerHTML=[
+    tile("Account beta",M.portBeta.toFixed(2),"vs SPY, MV-weighted (cash 0, index 1)"),
+    tile("Active-book beta",M.activeBeta.toFixed(2),`A 10% SPY drop ≈ ${fmt$(-0.10*M.activeBeta*M.activeMV)} on the active book`),
+    tile("Active-book vol",fmtPn(M.activeVol,1),"annualized, 1y daily covariance"),
+    tile("Beta-adj. exposure",fmtPn(M.portBeta*(M.nav-M.cash)/M.nav,1),"of NAV, whole account"),
+    tile("Top 5 active",fmtPn(top5/M.nav,1),"of NAV · "+fmtPn(top5/M.activeMV,0)+" of active book"),
+    tile("Highest beta",hiBeta?hiBeta.t+" "+hiBeta.beta.toFixed(2):"—",hiBeta?fmtPn(hiBeta.w,2)+" of NAV":"")
+  ].join("");
+  const sec=Object.entries(M.sectors).sort((a,b)=>b[1]-a[1]);
+  bars($("#sectorBars"),sec.map(([k,v])=>({l:k,v:v/M.nav,f:fmtPn(v/M.nav,1)+" · "+fmtPn(v/M.activeMV,0)+" of active"})));
+  bars($("#concBars"),act.slice().sort((a,b)=>b.mv-a.mv).slice(0,10).map(p=>({l:p.t,v:p.w,f:fmtPn(p.w,2)})));
+  bars($("#rcBars"),M.act.slice().sort((a,b)=>b.rc-a.rc).slice(0,12).map(p=>({l:p.t,v:p.rc,f:fmtPn(p.rc,1)+" (wt "+fmtPn(p.mv/M.activeMV,1)+")"})));
+  table($("#riskTable"),[{h:"Ticker",k:"t",l:1,f:r=>`<span class="tk">${r.t}</span>`},{h:"% NAV",k:"w",f:r=>fmtPn(r.w,2)},{h:"Beta",k:"beta",f:r=>isFinite(r.beta)?r.beta.toFixed(2):"—"},{h:"Vol",k:"vol",f:r=>isFinite(r.vol)?fmtPn(r.vol,0):"—"},{h:"Risk share",k:"rc",f:r=>isFinite(r.rc)?fmtPn(r.rc,1):"—"},{h:"Obs",k:"obs",f:r=>r.obs}],act.map(p=>({...p})),{sort:"rc"});
+  { const allSec=[...new Set([...Object.keys(BENCH_WEIGHTS),...Object.keys(M.sectors)])]; const rows=allSec.map(s=>{ const a=(M.sectors[s]||0)/M.activeMV; const b=BENCH_WEIGHTS[s]||0; return {l:s,a,b,v:a-b,f:`${fmtPn(a,0)} vs ${fmtPn(b,0)} · ${fmtP(a-b,0)}`}; }).sort((x,y)=>Math.abs(y.v)-Math.abs(x.v));
+    bars($("#tiltBars"),rows.map(r=>({l:r.l,v:r.v,f:r.f,cls:r.v<0?"m":""})),{center:true});
+    const bigOW=rows.filter(r=>r.v>0)[0], bigUW=rows.filter(r=>r.v<0).sort((x,y)=>x.v-y.v)[0];
+    $("#tiltNote").textContent=`Biggest overweight ${bigOW?bigOW.l+" "+fmtP(bigOW.v,0):"—"}; biggest underweight ${bigUW?bigUW.l+" "+fmtP(bigUW.v,0):"—"}. Active share vs the index's sector mix: ${fmtPn(rows.reduce((s,r)=>s+Math.abs(r.v),0)/2,0)}.`;
+    const liq=act.filter(p=>isFinite(p.pctAdv)).sort((a,b)=>b.pctAdv-a.pctAdv).slice(0,10);
+    bars($("#liqBars"),liq.map(p=>({l:p.t,v:p.pctAdv,f:fmtPn(p.pctAdv,2)+" of ADV"+(p.pctAdv>0.05?" ⚠":""),cls:p.pctAdv>0.05?"neg":""}))); }
+  const A=M.act; const N=A.length; const heat=$("#heat"); heat.style.gridTemplateColumns=`auto repeat(${N},minmax(22px,1fr))`;
+  let h=`<div class="h"></div>`+A.map(p=>`<div class="h">${p.t}</div>`).join("");
+  A.forEach((p,i)=>{ h+=`<div class="h" style="justify-content:flex-end;padding-right:4px">${p.t}</div>`+p.corr.map((c,j)=>{ const a=Math.min(1,Math.abs(c)); const col=c>=0?`color-mix(in srgb,var(--acc) ${Math.round(a*85)}%,var(--panel2))`:`color-mix(in srgb,var(--mkt) ${Math.round(a*85)}%,var(--panel2))`; return `<div title="${p.t}×${A[j].t}: ${c.toFixed(2)}" style="background:${col}">${i===j?"":Math.round(c*100)}</div>`; }).join(""); });
+  heat.innerHTML=h;
+  // LIMITS
+  const biggest=act.slice().sort((a,b)=>b.w-a.w)[0]; const bigSec=sec[0]; const smallest=act.slice().sort((a,b)=>a.w-b.w)[0];
+  const grade=(ok,watch)=>ok?"ok":(watch?"watch":"breach");
+  const lim=[
+    {rule:"Single active name",limit:fmtPn(LIMITS.singleActiveMaxPctNAV)+" of NAV",now:`${biggest.t} ${fmtPn(biggest.w,2)}`,g:grade(biggest.w<=LIMITS.singleActiveMaxPctNAV,biggest.w<=LIMITS.singleActiveMaxPctNAV*1.1)},
+    {rule:"Top five active names",limit:fmtPn(LIMITS.topFiveActiveMaxPctNAV)+" of NAV",now:fmtPn(top5/M.nav,2),g:grade(top5/M.nav<=LIMITS.topFiveActiveMaxPctNAV,top5/M.nav<=LIMITS.topFiveActiveMaxPctNAV*1.1)},
+    {rule:"One sector",limit:fmtPn(LIMITS.sectorMaxPctActive)+" of active book",now:`${bigSec[0]} ${fmtPn(bigSec[1]/M.activeMV,1)}`,g:grade(bigSec[1]/M.activeMV<=LIMITS.sectorMaxPctActive,bigSec[1]/M.activeMV<=LIMITS.sectorMaxPctActive*1.1)},
+    {rule:"Minimum position",limit:fmtPn(LIMITS.minPositionPctNAV,1)+" of NAV",now:`${smallest.t} ${fmtPn(smallest.w,2)}`,g:grade(smallest.w>=LIMITS.minPositionPctNAV,true)},
+    {rule:"Active names",limit:"≤ "+LIMITS.maxActiveNames,now:String(act.length),g:grade(act.length<=LIMITS.maxActiveNames,true)},
+    {rule:"Account beta",limit:`${LIMITS.betaBand[0]} – ${LIMITS.betaBand[1]}`,now:M.portBeta.toFixed(2),g:grade(M.portBeta>=LIMITS.betaBand[0]&&M.portBeta<=LIMITS.betaBand[1],true)},
+    {rule:"Cash",limit:"≥ "+fmtPn(LIMITS.cashMinPctNAV,1)+" of NAV",now:fmtPn(M.cash/M.nav,2),g:grade(M.cash/M.nav>=LIMITS.cashMinPctNAV,true)},
+    {rule:"Active-book vol (soft)",limit:"≤ "+fmtPn(LIMITS.activeVolTarget,0),now:fmtPn(M.activeVol,1),g:grade(M.activeVol<=LIMITS.activeVolTarget,M.activeVol<=LIMITS.activeVolTarget*1.15)},
+  ];
+  const nb=lim.filter(l=>l.g==="breach").length; $("#limBadge").hidden=!nb; $("#limBadge").textContent=nb;
+  table($("#limTable"),[{h:"Rule",k:"rule",l:1,f:r=>r.rule},{h:"Limit",k:"limit",l:1,f:r=>r.limit},{h:"Now",k:"now",f:r=>r.now},{h:"Status",k:"g",f:r=>`<span class="pill ${r.g}">${r.g==="ok"?"OK":r.g==="watch"?"Watch":"Breach"}</span>`}],lim);
+  $("#ddLadder").innerHTML=LIMITS.drawdown.map(([lv,a])=>`<b class="${M.curDD<=lv?"dn":""}">${fmtPn(lv,0)}</b><span class="${M.curDD<=lv?"":"muted"}">${a}</span>`).join("")+`<b>now</b><span>${fmtPn(M.curDD,2)} from peak · worst ${fmtPn(M.maxDD,2)}</span>`;
+  const pr=act.map(p=>{ let s=[]; if(p.ret<=LIMITS.reunderwriteAt) s.push(["breach","Re-underwrite"]); else if(p.ret<=LIMITS.trimAt) s.push(["watch","Half-trim review"]); if(p.w>LIMITS.singleActiveMaxPctNAV) s.push(["breach","Over size limit"]); return {...p,flags:s}; }).filter(p=>p.flags.length);
+  if(pr.length) table($("#posRules"),[{h:"Ticker",k:"t",l:1,f:r=>`<span class="tk">${r.t}</span> <span class="muted">${r.book}</span>`},{h:"From cost",k:"ret",f:r=>fmtP(r.ret,1),c:r=>cls(r.ret)},{h:"% NAV",k:"w",f:r=>fmtPn(r.w,2)},{h:"Flag",k:"f",l:1,f:r=>r.flags.map(f=>`<span class="pill ${f[0]}">${f[1]}</span>`).join(" ")}],pr,{sort:"ret",dir:1});
+  else $("#posRules").innerHTML="<tbody><tr><td class='l t muted'>Nothing flagged.</td></tr></tbody>";
+  // PEOPLE
+  const traders=bk.filter(b=>b.name!=="Center Book"); const cb=M.books["Center Book"];
+  const cbAct=cb?cb.pos.filter(p=>!p.index):[]; const cbCost=cbAct.reduce((s,p)=>s+p.cost,0),cbMV=cbAct.reduce((s,p)=>s+p.mv,0);
+  const best=traders.slice().sort((a,b)=>b.ret-a.ret)[0], worst=traders.slice().sort((a,b)=>a.ret-b.ret)[0];
+  const closedAct=M.closed.filter(c=>!c.index); const realizedTr=traders.reduce((s,b)=>s+(b.realized||0),0); const fulls=closedAct.filter(c=>c.full);
+  $("#peopleTiles").innerHTML=[tile("Realized P&L",fmt$(closedAct.reduce((s,c)=>s+c.pnl,0)),`${fulls.length} full exit${fulls.length===1?"":"s"}, ${closedAct.length-fulls.length} trim${closedAct.length-fulls.length===1?"":"s"} · ${fulls.length?Math.round(fulls.filter(c=>c.pnl>0).length/fulls.length*100)+"% winners":"no exits yet"}`,cls(closedAct.reduce((s,c)=>s+c.pnl,0))),tile("Trader capital",fmt$(traders.reduce((s,b)=>s+b.mv,0)),`${traders.length} traders · ${traders.reduce((s,b)=>s+b.n,0)} names`),tile("Trader P&L",fmt$(traders.reduce((s,b)=>s+b.pnl,0)),fmtP(traders.reduce((s,b)=>s+b.pnl,0)/traders.reduce((s,b)=>s+b.cost,0),2)+" on cost",cls(traders.reduce((s,b)=>s+b.pnl,0))),tile("Center Book (stocks)",fmt$(cbMV-cbCost),fmtP((cbMV-cbCost)/cbCost,2)+" on cost",cls(cbMV-cbCost)),tile("Best book",best?best.name:"—",best?fmtP(best.ret,2):"","up"),tile("Lagging book",worst?worst.name:"—",worst?fmtP(worst.ret,2):"","dn")].join("");
+  bars($("#peopleBars"),[...traders.slice().sort((a,b)=>(b.pnl+(b.realized||0))-(a.pnl+(a.realized||0))).map(b=>({l:b.name,v:b.pnl+(b.realized||0),f:fmt$(b.pnl+(b.realized||0))+" · "+fmtP((b.pnl+(b.realized||0))/b.cost,2)+(b.realized?` (realized ${fmt$(b.realized)})`:""),cls:(b.pnl+(b.realized||0))<0?"neg":""})),{l:"Center Book (stocks)",v:cbMV-cbCost,f:fmt$(cbMV-cbCost)+" · "+fmtP((cbMV-cbCost)/cbCost,2),cls:"m"}],{center:true,sign:true});
+  if(M.closed.length) table($("#closedTable"),[{h:"Ticker",k:"t",l:1,f:r=>`<span class="tk">${r.t}</span> <span class="muted">${r.book}</span>`},{h:"Closed",k:"date",f:r=>r.date?r.date.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"}):"—"},{h:"Type",k:"full",l:1,f:r=>r.full?`<span class="pill ok">Full exit</span>`:`<span class="pill na">Trim</span>`},{h:"Shares",k:"sh",f:r=>r.sh.toFixed(2)},{h:"Avg cost",k:"avg",f:r=>fmt$(r.avg,2)},{h:"Exit",k:"px",f:r=>fmt$(r.px,2)},{h:"P&L $",k:"pnl",f:r=>fmt$(r.pnl),c:r=>cls(r.pnl)},{h:"P&L %",k:"ret",f:r=>fmtP(r.ret,1),c:r=>cls(r.ret)},{h:"Held",k:"hold",f:r=>r.hold==null?"—":r.hold+"d"}],M.closed.map(c=>({...c,date:c.date||null})),{sort:"date"});
+  else $("#closedTable").innerHTML="<tbody><tr><td class='l t muted'>No sells in the Trade Log yet.</td></tr></tbody>";
+  $("#peopleTables").innerHTML=[...traders,...(cb?[{...cb,pos:cbAct,name:"Center Book (stocks)"}]:[])].map(b=>`<div class="panel mt"><h2>${b.name}</h2><div class="sub">${b.pos.length} names · ${fmt$(b.pos.reduce((s,p)=>s+p.mv,0))} · ${b.pos.filter(p=>p.pnl>0).length}/${b.pos.length} in the green</div><div class="tw"><table>${b.pos.slice().sort((a,b)=>b.mv-a.mv).map(p=>`<tr><td class="l t"><span class="tk">${p.t}</span> <span class="muted">${p.name}</span></td><td class="l t muted">${p.sector}</td><td>${fmt$(p.cost)}</td><td>${fmt$(p.mv)}</td><td class="${cls(p.pnl)}">${fmt$(p.pnl)}</td><td class="${cls(p.ret)}">${fmtP(p.ret,1)}</td><td class="${cls(p.today)}">${fmtP(p.today,2)}</td></tr>`).join("")}</table></div></div>`).join("");
+  $("#foot").textContent=`${src} · prices delayed up to 20 min (Google Finance) · betas on ${M.act[0]?M.act[0].obs:0} trading days · built for MPSIF Opportunistic Equities`;
+}
+
+
+/* ===================== earnings ===================== */
+function parseEarnings(rows,M){ if(!rows||rows.length<2) return []; const H=rows[0].map(h=>h.trim().toLowerCase()); const ci=n=>H.findIndex(h=>h===n.toLowerCase()); const cT=ci("ticker"),cD=ci("next earnings"),cTm=ci("time (auto)"),cIM=ci("implied move"),cSrc=ci("source (auto)"),cN=ci("plan notes"),cPl=ci("earnings plan"),cUp=ci("updated (auto)");
+  const today=new Date(); const t0=Date.UTC(today.getFullYear(),today.getMonth(),today.getDate()); const out=[];
+  for(const r of rows.slice(1)){ const t=(r[cT]||"").trim().toUpperCase(); if(!t) continue; const p=M.pos.find(x=>x.t===t); if(!p) continue; const d=pDate(r[cD]); const im=pct(r[cIM]);
+    out.push({t,p,date:d,days:d?Math.round((d.getTime()-t0)/864e5):null,time:(r[cTm]||"").trim().toUpperCase(),im:isFinite(im)?im:null,src:r[cSrc]||"",note:(cN>=0?(r[cN]||""):"").trim(),plan:(cPl>=0?(r[cPl]||""):"").trim(),upd:r[cUp]||"",risk:(isFinite(im)&&p)?im*p.mv:null}); }
+  return out; }
+function renderEarnings(M){ const E=M.earn; const up=E.filter(e=>e.date&&e.days>=0).sort((a,b)=>a.days-b.days); const win=up.filter(e=>e.days<=EARNINGS_RULES.windowDays); const wk=up.filter(e=>e.days<=7);
+  const riskWk=wk.reduce((s,e)=>s+(e.risk||0),0); const noDate=E.filter(e=>!e.date&&!e.p.index); const nxt=up[0];
+  $("#earnTiles").innerHTML=[tile("Next print",nxt?nxt.t:"—",nxt?`${nxt.date.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"})} ${nxt.time} · in ${nxt.days}d`:"nothing scheduled"),tile("Next 7 days",String(wk.length),wk.map(e=>e.t).join(", ")||"no prints"),tile("$ at risk, 7d",fmt$(riskWk),`${fmtPn(riskWk/M.nav,2)} of NAV · implied move × position`,riskWk/M.nav>EARNINGS_RULES.maxDollarAtRiskPctNav?"dn":""),tile("Next 30 days",String(up.filter(e=>e.days<=30).length),fmtPn(up.filter(e=>e.days<=30).reduce((s,e)=>s+e.p.mv,0)/M.nav,1)+" of NAV reporting"),tile("No date found",String(noDate.length),noDate.map(e=>e.t).join(", ")||"all names dated",noDate.length?"dn":""),tile("Data as of",E.find(e=>e.upd)?.upd||"—","scheduled refresh, weekdays 7:23 ET")].join("");
+  // calendar: this month + next
+  const now=new Date(); const months=[0,1].map(k=>new Date(Date.UTC(now.getFullYear(),now.getMonth()+k,1)));
+  const byDay={}; E.forEach(e=>{ if(e.date){ const k=dkey(e.date); (byDay[k]=byDay[k]||[]).push(e);} });
+  const todayK=dkey(new Date(Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())));
+  $("#cal").innerHTML=months.map(m0=>{ const y=m0.getUTCFullYear(),mo=m0.getUTCMonth(); const first=m0.getUTCDay(); const nd=new Date(Date.UTC(y,mo+1,0)).getUTCDate(); let cells="";
+    for(let i=0;i<first;i++) cells+=`<div class="day pad"></div>`;
+    for(let d=1;d<=nd;d++){ const k=dkey(new Date(Date.UTC(y,mo,d))); const ev=byDay[k]||[]; cells+=`<div class="day ${k===todayK?"today":""} ${k<todayK?"past":""}">${d}${ev.map(e=>`<b class="${e.p.w>EARNINGS_RULES.maxPctNavIntoPrint?"big":""}" title="${e.t} ${e.time}">${e.time==="BMO"?"◐ ":e.time==="AMC"?"● ":""}${e.t}</b>`).join("")}</div>`; }
+    return `<div class="month"><h3>${m0.toLocaleDateString("en-US",{month:"long",year:"numeric",timeZone:"UTC"})}</h3><div class="mgrid">${["S","M","T","W","T","F","S"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>`; }).join("");
+  // rules
+  const flags=[]; for(const e of win){ const f=[]; if(e.p.w>EARNINGS_RULES.maxPctNavIntoPrint) f.push(["watch",`${fmtPn(e.p.w,2)} of NAV into the print`]); if(EARNINGS_RULES.noteRequired&&!e.plan) f.push(["breach","No earnings plan in the sheet"]); if(e.im==null) f.push(["na","No implied move yet"]); if(f.length) flags.push({e,f}); }
+  $("#earnBadge").hidden=!flags.some(x=>x.f.some(y=>y[0]==="breach")); $("#earnBadge").textContent=flags.filter(x=>x.f.some(y=>y[0]==="breach")).length;
+  $("#earnRules").innerHTML=flags.length?`<table>${flags.map(({e,f})=>`<tr><td class="l t"><span class="tk">${e.t}</span> <span class="muted">${e.p.book} · ${e.days}d</span></td><td class="l t">${f.map(x=>`<span class="pill ${x[0]}">${x[1]}</span>`).join(" ")}</td></tr>`).join("")}</table>`:`<div class="muted">No prints inside the ${EARNINGS_RULES.windowDays}-day window.</div>`;
+  table($("#earnTable"),[{h:"Ticker",k:"t",l:1,f:r=>`<span class="tk">${r.t}</span> <span class="muted">${r.p.name}</span>`},{h:"Book",k:"book",l:1,f:r=>r.p.book},{h:"Date",k:"days",f:r=>r.date?r.date.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"}):"—"},{h:"In",k:"days",f:r=>r.days==null?"—":r.days+"d"},{h:"Time",k:"time",f:r=>r.time||"—"},{h:"% NAV",k:"w",f:r=>fmtPn(r.p.w,2)},{h:"Implied move",k:"im",f:r=>r.im==null?"—":"±"+fmtPn(r.im,1)},{h:"$ at risk",k:"risk",f:r=>r.risk==null?"—":"±"+fmt$(r.risk)},{h:"Beta",k:"beta",f:r=>isFinite(r.p.beta)?r.p.beta.toFixed(2):"—"},{h:"Source",k:"src",l:1,f:r=>`<span class="muted">${r.src}</span>`},{h:"Plan",k:"plan",l:1,f:r=>r.plan?`<span class="pill ${/exit|trim|hedge/i.test(r.plan)?"watch":"ok"}">${r.plan}</span>${r.note?` <span class="muted">${r.note}</span>`:""}`:""}],
+    E.filter(e=>!e.p.index).map(e=>({...e,w:e.p.w,beta:e.p.beta,book:e.p.book,days:e.days==null?9999:e.days})),{sort:"days",dir:1}); }
+
+/* ===================== loading ===================== */
+let lastModel=null;
+async function fetchCSV(gid){ const u=`${CONFIG.pub}?gid=${gid}&single=true&output=csv&_=${Date.now()}`; const r=await fetch(u,{cache:"no-store"}); if(!r.ok) throw new Error(r.status); return parseCSV(await r.text()); }
+async function load(){
+  let src, rows;
+  try{ const [p,t,px,e,nm]=await Promise.all([fetchCSV(CONFIG.gids.positions),fetchCSV(CONFIG.gids.trades),fetchCSV(CONFIG.gids.prices),fetchCSV(CONFIG.gids.earnings),fetchCSV(CONFIG.gids.names)]); rows={p,t,px,e,nm}; src="Live · Google Sheet · "+new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); $("#srcChip").className="chip live"; }
+  catch(e){ if(!SNAPSHOT.positions){ $("#srcChip").className="chip snap"; $("#srcTxt").textContent="Couldn't reach the Google Sheet — check your connection and press ↻"; return; } rows={p:parseCSV(SNAPSHOT.positions),t:parseCSV(SNAPSHOT.trades),px:parseCSV(SNAPSHOT.prices),e:parseCSV(SNAPSHOT.earnings),nm:parseCSV(SNAPSHOT.names)}; src="Snapshot · "+SNAPSHOT.asOf; $("#srcChip").className="chip snap"; }
+  $("#srcTxt").textContent=src;
+  try{ lastModel=buildModel(rows.p,rows.t,rows.px,rows.nm); lastModel.earn=parseEarnings(rows.e,lastModel); render(lastModel,src); renderEarnings(lastModel); } catch(e){ console.error(e); $("#srcTxt").textContent="Data error: "+e.message; }
+}
+document.querySelectorAll("nav [role=tab]").forEach(b=>b.onclick=()=>{ document.querySelectorAll("nav [role=tab]").forEach(x=>x.setAttribute("aria-selected",x===b)); document.querySelectorAll("section.tab").forEach(s=>s.classList.toggle("on",s.id==="tab-"+b.dataset.tab)); if(b.dataset.tab==="book"&&lastModel) drawEq(lastModel); });
+$("#refresh").onclick=load;
+window.addEventListener("resize",()=>{ if(lastModel&&$("#tab-book").classList.contains("on")) drawEq(lastModel); });
+
+/* ===================== gate ===================== */
+async function openDesk(){ $("#gate").style.display="none"; await load(); setInterval(load,CONFIG.pollSeconds*1000); }
+(function(){ let ok=false; try{ ok=sessionStorage.getItem("mpsif_ok")===CONFIG.passHash; }catch(e){}
+  if(ok) openDesk();
+  $("#gateForm").onsubmit=async e=>{ e.preventDefault(); const h=await sha256($("#pw").value.trim()); if(h===CONFIG.passHash){ try{sessionStorage.setItem("mpsif_ok",h);}catch(x){} openDesk(); } else { $("#gateErr").textContent="Wrong password."; const f=$("#gateForm"); f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake"); } };
+})();
+</script>
+
+</body>
+</html>
